@@ -191,7 +191,9 @@ export default function App() {
 
   // AI & Feedback loading states
   const [isProcessingAI, setIsProcessingAI] = useState<{ [key: string]: boolean }>({});
+  const [aiFallbackTasks, setAiFallbackTasks] = useState<{ [key: string]: boolean }>({});
   const [coachFeedback, setCoachFeedback] = useState<string | null>(null);
+  const [coachFeedbackGeneric, setCoachFeedbackGeneric] = useState(false);
   const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
 
   // Focus Timer States
@@ -295,7 +297,7 @@ export default function App() {
             let carryOvers: string[] = [];
             let hasCarryOver = false;
 
-            if (parsedDayState && parsedDayState.date !== today && parsedDayState.status !== 'closed') {
+            if (parsedDayState && parsedDayState.date !== today) {
               const prevTasks = t ? JSON.parse(t) : [];
               const unfinished = prevTasks.filter((task: Task) => 
                 parsedDayState.todayTaskIds.includes(task.id) && task.status === 'active'
@@ -657,11 +659,31 @@ export default function App() {
   // ============================================================
   // AI-ASSISTED APIS
   // ============================================================
+  const LOCAL_FALLBACK_STEPS = [
+    'Find and gather what you need',
+    'Start the first small part for just 2 minutes',
+    'Do the next part',
+    'Finish and celebrate!'
+  ];
+
   const callAIBreakdown = async (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
     setIsProcessingAI(prev => ({ ...prev, [taskId]: true }));
+    const applySteps = (stepTitles: string[], isFallback: boolean) => {
+      const generatedSubtasks = stepTitles.map((stepTitle: string) => ({
+        id: 'sub_' + generateId(),
+        title: stepTitle,
+        done: false
+      }));
+      const updated = tasks.map(t => 
+        t.id === taskId ? { ...t, subtasks: [...t.subtasks, ...generatedSubtasks], updatedAt: new Date().toISOString() } : t
+      );
+      saveTasks(updated);
+      logEvent('task_broken_down', 'task', taskId, { subtaskCount: stepTitles.length, fallback: isFallback });
+      setAiFallbackTasks(prev => ({ ...prev, [taskId]: isFallback }));
+    };
     try {
       const res = await fetch('/api/breakdown', {
         method: 'POST',
@@ -670,20 +692,13 @@ export default function App() {
       });
       const data = await res.json();
       if (data.steps && Array.isArray(data.steps)) {
-        const generatedSubtasks = data.steps.map((stepTitle: string) => ({
-          id: 'sub_' + generateId(),
-          title: stepTitle,
-          done: false
-        }));
-        const updated = tasks.map(t => 
-          t.id === taskId ? { ...t, subtasks: [...t.subtasks, ...generatedSubtasks], updatedAt: new Date().toISOString() } : t
-        );
-        saveTasks(updated);
-        logEvent('task_broken_down', 'task', taskId, { subtaskCount: data.steps.length });
+        applySteps(data.steps, Boolean(data.warning));
+      } else {
+        applySteps(LOCAL_FALLBACK_STEPS, true);
       }
     } catch (err) {
       console.error(err);
-      alert('AI is restabilizing. Manual breakdown triggered.');
+      applySteps(LOCAL_FALLBACK_STEPS, true);
     } finally {
       setIsProcessingAI(prev => ({ ...prev, [taskId]: false }));
     }
@@ -721,7 +736,8 @@ export default function App() {
           carryOverCount: 0
         };
         saveTasks([...tasks, newTask]);
-        logEvent('inbox_converted_to_task', 'inbox', undefined, { text: inboxItemText });
+        if (data.warning) setAiFallbackTasks(prev => ({ ...prev, [newTask.id]: true }));
+        logEvent('inbox_converted_to_task', 'inbox', undefined, { text: inboxItemText, fallback: Boolean(data.warning) });
       } else if (cleanType === 'routine') {
         const newRoutine: Routine = {
           id: 'rot_' + generateId(),
@@ -760,6 +776,7 @@ export default function App() {
         carryOverCount: 0
       };
       saveTasks([...tasks, newTask]);
+      setAiFallbackTasks(prev => ({ ...prev, [newTask.id]: true }));
       const nextInbox = inbox.filter((_, idx) => idx !== index);
       saveInbox(nextInbox);
       setActiveTab('planner');
@@ -778,9 +795,11 @@ export default function App() {
       });
       const data = await res.json();
       setCoachFeedback(data.insight || 'You are doing amazing! Hisham is proud of your consistency.');
+      setCoachFeedbackGeneric(Boolean(data.warning));
     } catch (err) {
       console.error(err);
       setCoachFeedback('ADHD Coaching Secret: Momentum is built by starting tiny. Keep taking Micro-Steps! You completed several focus sprints recently.');
+      setCoachFeedbackGeneric(true);
     } finally {
       setIsGeneratingFeedback(false);
     }
@@ -1609,6 +1628,11 @@ export default function App() {
                                   <span className="font-medium text-sm text-[#22262B]">{sub.title}</span>
                                 </div>
                               ))}
+                              {aiFallbackTasks[nowTask.id] && (
+                                <p className="text-[11px] font-semibold text-[#B8892B] mt-2">
+                                  AI coach is offline right now, so these are standard starter steps, not tailored ones.
+                                </p>
+                              )}
                             </div>
                           ) : (
                             <div className="mt-4 flex gap-2">
@@ -1617,7 +1641,7 @@ export default function App() {
                                 disabled={isProcessingAI[nowTask.id]}
                                 className="bg-[#1F6F63] hover:bg-[#153F38] text-white text-xs font-semibold py-2 px-4 rounded-full transition-all"
                               >
-                                {isProcessingAI[nowTask.id] ? 'AI Breaking down...' : '🧩 AI Break down into tiny steps'}
+                                {isProcessingAI[nowTask.id] ? 'AI Breaking down...' : 'AI Break down into tiny steps'}
                               </button>
                             </div>
                           )}
@@ -1633,7 +1657,7 @@ export default function App() {
                               onClick={() => toggleTaskDone(nowTask.id)}
                               className="bg-white hover:bg-[#F6F3ED] text-[#1F6F63] border border-[#1F6F63] text-xs font-semibold py-2 px-4 rounded-full"
                             >
-                              ✅ Complete Task
+                              Complete Task
                             </button>
                           </div>
                         </div>
@@ -1786,7 +1810,7 @@ export default function App() {
                             <span className={`text-sm font-semibold ${isDone ? 'line-through text-[#6B7075]' : 'text-[#22262B]'}`}>
                               {task.title}
                             </span>
-                            {isNow && <span className="ml-2 text-[10px] bg-[#1F6F63] text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Now Target</span>}
+                            {isNow && <span className="ml-2 text-[10px] bg-[#1F6F63] text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider whitespace-nowrap inline-block align-middle">Now Target</span>}
                           </div>
                         </div>
 
@@ -1868,7 +1892,7 @@ export default function App() {
                           onClick={() => callAIBreakdown(task.id)}
                           className="bg-[#1F6F63]/10 text-[#1F6F63] text-[10px] font-bold px-3 py-1 rounded-full border border-transparent hover:border-[#1F6F63]"
                         >
-                          🧩 AI Breakdown
+                          AI Breakdown
                         </button>
                         <button 
                           onClick={() => {
@@ -1914,13 +1938,13 @@ export default function App() {
                               onClick={() => toggleTaskDone(task.id)}
                               className="bg-white hover:bg-[#1F6F63] hover:text-white text-[#1F6F63] border border-[#1F6F63] text-xs font-semibold py-1.5 px-3 rounded-full"
                             >
-                              ✅ Complete
+                              Complete
                             </button>
                             <button 
                               onClick={() => makeTaskNow(task.id)}
                               className={`text-xs font-semibold py-1.5 px-3 rounded-full border transition-all ${isNow ? 'bg-[#1F6F63] text-white border-[#1F6F63]' : 'bg-white text-[#1F6F63] border-[#1F6F63] hover:bg-[#1F6F63]/10'}`}
                             >
-                              ⭐ Now Target
+                              Now Target
                             </button>
                             <button 
                               onClick={() => {
@@ -1934,7 +1958,7 @@ export default function App() {
                               }}
                               className={`text-xs font-semibold py-1.5 px-3 rounded-full border transition-all ${isToday ? 'bg-[#E8D5B5] text-[#22262B] border-[#D4BFA0]' : 'bg-white text-[#1F6F63] border-[#1F6F63] hover:bg-[#1F6F63]/10'}`}
                             >
-                              {isToday ? '📅 Today Plan' : '📅 Set for Today'}
+                              {isToday ? 'Today Plan' : 'Set for Today'}
                             </button>
                             <button 
                               onClick={() => deleteTask(task.id)}
@@ -1957,9 +1981,15 @@ export default function App() {
                               className="text-xs text-[#1F6F63] hover:underline flex items-center gap-1 font-semibold"
                             >
                               <Sparkles className="w-3.5 h-3.5" />
-                              {isProcessingAI[task.id] ? 'AI breaking down...' : '🧩 AI Break Down'}
+                              {isProcessingAI[task.id] ? 'AI breaking down...' : 'AI Break Down'}
                             </button>
                           </div>
+
+                          {aiFallbackTasks[task.id] && (
+                            <p className="text-[11px] font-semibold text-[#B8892B]">
+                              AI coach is offline right now, so these are standard starter steps, not tailored ones.
+                            </p>
+                          )}
 
                           {task.subtasks.map(sub => (
                             <div key={sub.id} className="flex items-center gap-2 bg-white/50 p-2 rounded-lg text-sm">
@@ -2048,7 +2078,7 @@ export default function App() {
                           onClick={() => toggleRoutineComplete(routine.id)}
                           className={`text-xs font-bold px-4 py-2 rounded-full border transition-all ${completedToday ? 'bg-[#E4DFD5] text-[#6B7075] border-[#E4DFD5]' : 'bg-white border-[#1F6F63] text-[#1F6F63] hover:bg-[#1F6F63] hover:text-white'}`}
                         >
-                          {completedToday ? '✅ Done Today' : 'Mark Complete'}
+                          {completedToday ? 'Done Today' : 'Mark Complete'}
                         </button>
                         <button onClick={() => deleteRoutine(routine.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-all">
                           <Trash2 className="w-4 h-4" />
@@ -2294,13 +2324,13 @@ export default function App() {
                           className="bg-[#1F6F63] text-white text-xs font-bold py-1.5 px-3 rounded-full flex items-center gap-1 hover:bg-[#153F38]"
                         >
                           <Sparkles className="w-3 h-3" />
-                          {isProcessingAI[`inbox_${index}`] ? 'Structuring...' : '📋 AI to Task'}
+                          {isProcessingAI[`inbox_${index}`] ? 'Structuring...' : 'AI to Task'}
                         </button>
                         <button 
                           onClick={() => processCaptureInboxItem(item.text, index, 'routine')}
                           className="bg-white text-[#1F6F63] border border-[#1F6F63] text-xs font-semibold py-1.5 px-3 rounded-full hover:bg-[#1F6F63]/10"
                         >
-                          🔄 to Routine
+                          to Routine
                         </button>
                         <button 
                           onClick={() => saveInbox(inbox.filter((_, idx) => idx !== index))}
@@ -2373,8 +2403,13 @@ export default function App() {
 
                   {coachFeedback ? (
                     <div className="bg-[#F6F3ED] border border-[#E4DFD5] p-5 rounded-2xl text-left font-serif text-[#153F38] text-sm leading-relaxed relative">
-                      <span className="absolute top-2 right-4 text-[9px] font-bold text-[#1F6F63] font-sans uppercase tracking-wider">Active Analysis</span>
+                      <span className={`absolute top-2 right-4 text-[9px] font-bold font-sans uppercase tracking-wider ${coachFeedbackGeneric ? 'text-[#B8892B]' : 'text-[#1F6F63]'}`}>{coachFeedbackGeneric ? 'Offline General Tip' : 'Active Analysis'}</span>
                       "{coachFeedback}"
+                      {coachFeedbackGeneric && (
+                        <p className="mt-3 text-[11px] font-semibold text-[#B8892B] font-sans not-italic">
+                          General starter tip, not a personal analysis - the AI coach connection is unavailable right now.
+                        </p>
+                      )}
                     </div>
                   ) : null}
 
@@ -2383,7 +2418,7 @@ export default function App() {
                     disabled={isGeneratingFeedback}
                     className="bg-[#1F6F63] hover:bg-[#153F38] text-white text-sm font-semibold py-2.5 px-6 rounded-full flex items-center justify-center gap-2 mx-auto transition-all"
                   >
-                    {isGeneratingFeedback ? 'Analyzing Logs...' : '🤖 Generate Coach Insights'}
+                    {isGeneratingFeedback ? 'Analyzing Logs...' : 'Generate Coach Insights'}
                   </button>
                 </div>
 
@@ -2624,7 +2659,7 @@ export default function App() {
               <div className="space-y-6">
                 {dailyReports.length === 0 ? (
                   <div className="bg-white border border-[#E4DFD5] p-8 rounded-3xl shadow-sm text-center space-y-4">
-                    <div className="mx-auto w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center text-xl">📅</div>
+                    <div className="mx-auto w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center text-xl"><Calendar className="w-6 h-6 text-orange-500" /></div>
                     <h3 className="text-lg font-fraunces font-medium text-[#153F38]">Day-by-Day ADHD Journey Log</h3>
                     <p className="text-xs text-[#6B7075] max-w-sm mx-auto">
                       No historical days are logged in this account yet. Go to the <strong className="text-[#1F6F63]">Settings tab</strong> and click <strong className="text-[#1F6F63]">"Simulate 2 Months of Active Coaching"</strong> to instantly load 60 days of high-fidelity daily logs, routine completions, and coach insights!
@@ -2778,7 +2813,7 @@ export default function App() {
                                       <span className="text-[10px] text-[#6B7075]">Move Destination:</span>
                                       {move.action === 'task_completed' && (
                                         <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1">
-                                          ✅ Completed Today
+                                          Completed Today
                                         </span>
                                       )}
                                       {move.action === 'task_carried_over' && (
@@ -3065,52 +3100,52 @@ export default function App() {
       {/* ============================================================
           BOTTOM PERSISTENT NAVIGATION BAR
           ============================================================ */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-[#F6F3ED]/95 backdrop-blur-md border-t border-[#1F6F63]/20 py-2 px-1 flex justify-around items-center z-40 shadow-lg">
+      <nav className="fixed bottom-0 left-0 right-0 bg-[#F6F3ED]/95 backdrop-blur-md border-t border-[#1F6F63]/20 py-2 px-1 flex justify-start sm:justify-around items-center gap-1 z-40 shadow-lg overflow-x-auto">
         <button 
           onClick={() => setActiveTab('home')}
-          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${activeTab === 'home' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all shrink-0 ${activeTab === 'home' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
         >
           <Home className="w-5.5 h-5.5" />
           <span className="text-[10px] mt-0.5 uppercase tracking-wider font-semibold">Home</span>
         </button>
         <button 
           onClick={() => setActiveTab('planner')}
-          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${activeTab === 'planner' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all shrink-0 ${activeTab === 'planner' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
         >
           <Calendar className="w-5.5 h-5.5" />
           <span className="text-[10px] mt-0.5 uppercase tracking-wider font-semibold">Planner</span>
         </button>
         <button 
           onClick={() => setActiveTab('routines')}
-          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${activeTab === 'routines' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all shrink-0 ${activeTab === 'routines' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
         >
           <RotateCw className="w-5.5 h-5.5" />
           <span className="text-[10px] mt-0.5 uppercase tracking-wider font-semibold">Routines</span>
         </button>
         <button 
           onClick={() => setActiveTab('focus')}
-          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${activeTab === 'focus' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all shrink-0 ${activeTab === 'focus' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
         >
           <Target className="w-5.5 h-5.5" />
           <span className="text-[10px] mt-0.5 uppercase tracking-wider font-semibold">Focus</span>
         </button>
         <button 
           onClick={() => setActiveTab('capture')}
-          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${activeTab === 'capture' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all shrink-0 ${activeTab === 'capture' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
         >
           <Zap className="w-5.5 h-5.5" />
           <span className="text-[10px] mt-0.5 uppercase tracking-wider font-semibold">Capture</span>
         </button>
         <button 
           onClick={() => setActiveTab('insights')}
-          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${activeTab === 'insights' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all shrink-0 ${activeTab === 'insights' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
         >
           <BarChart2 className="w-5.5 h-5.5" />
           <span className="text-[10px] mt-0.5 uppercase tracking-wider font-semibold">Insights</span>
         </button>
         <button 
           onClick={() => setActiveTab('settings')}
-          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${activeTab === 'settings' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all shrink-0 ${activeTab === 'settings' ? 'text-[#1F6F63] font-bold scale-105' : 'text-[#6B7075] scale-95 hover:text-[#1F6F63]'}`}
         >
           <Settings className="w-5.5 h-5.5" />
           <span className="text-[10px] mt-0.5 uppercase tracking-wider font-semibold">Config</span>
@@ -3132,6 +3167,9 @@ export default function App() {
                   <h2 className="text-4xl font-fraunces font-medium text-[#153F38]">The Wired Leader</h2>
                   <p className="text-[#6B7075] max-w-md mx-auto text-sm leading-relaxed">
                     Welcome. Standard planners demand rigid consistency. We build a supportive, adaptive shell around your attention span instead.
+                  </p>
+                  <p className="max-w-md mx-auto text-[11px] leading-relaxed bg-[#E8D5B5]/40 border border-[#E8D5B5] text-[#6B5A2B] rounded-xl px-4 py-2.5">
+                    Private trial build: the AI coach is live. If the free daily AI quota runs out, the app says so and shows clearly-labeled standard steps instead. Nothing here is medical advice.
                   </p>
                 </div>
 
@@ -3155,7 +3193,7 @@ export default function App() {
                         <span>2. Frictionless Captures</span>
                       </div>
                       <p className="text-xs text-[#6B7075] leading-relaxed">
-                        Got a messy brain-dump or raw voice note? Log it instantly in your Capture Inbox without worry. Our AI coach Hisham will sort it later.
+                        Got a messy brain-dump? Log it instantly in your Capture Inbox without worry. It gets sorted into clear starter tasks whenever you're ready.
                       </p>
                     </div>
 
@@ -3184,7 +3222,7 @@ export default function App() {
                 <div className="bg-[#1F6F63]/5 p-5 rounded-2xl border border-[#1F6F63]/10 space-y-2">
                   <h4 className="text-xs uppercase tracking-wider font-bold text-[#1F6F63]">The Next Step</h4>
                   <p className="text-xs text-[#2c3138] leading-relaxed">
-                    We will now run a specialized cognitive assessment. This maps your exact ADHD executive functions (whether you struggle with **Initiation Overwhelm**, **Time Blindness**, or **Routine Instability**) and tunes Hisham's coaching pace.
+                    We'll now run a short self-reflection quiz. It suggests which focus pattern you lean toward (Initiation Overwhelm, Time Blindness, or Routine Instability) so the app can pace its reminders. This is not a medical assessment or diagnosis.
                   </p>
                 </div>
 
@@ -3192,7 +3230,7 @@ export default function App() {
                   onClick={() => setOnboardingStep('quiz')}
                   className="w-full bg-[#1F6F63] hover:bg-[#153F38] text-white py-4 rounded-full font-bold shadow-lg flex items-center justify-center gap-2 group transition-all text-sm"
                 >
-                  Start Cognitive Assessment 
+                  Start the Focus Quiz 
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
               </div>
@@ -3521,7 +3559,7 @@ export default function App() {
                     ← Back to selection
                   </button>
                   <button onClick={finishMorningResetPlan} className="bg-[#1F6F63] text-white text-xs font-bold py-2.5 px-6 rounded-full">
-                    ✅ Lock Today's Micro-Plan
+                    Lock Today's Micro-Plan
                   </button>
                 </div>
               </div>
@@ -3570,7 +3608,7 @@ export default function App() {
                             onClick={() => handleEveningTaskAction(task.id, 'defer')}
                             className="bg-white hover:bg-amber-50 border border-[#E4DFD5] text-[#B8892B] text-[10px] font-bold px-3 py-1 rounded-full"
                           >
-                            📅 Move to Backlog
+                            Move to Backlog
                           </button>
                           <button 
                             onClick={() => handleEveningTaskAction(task.id, 'archive')}
@@ -3615,7 +3653,7 @@ export default function App() {
               {/* BUCKET 1: KEEP */}
               <div className="bg-white border-2 border-[#1F6F63] p-4 rounded-2xl space-y-3">
                 <h3 className="font-bold text-xs uppercase tracking-wider text-[#1F6F63] flex justify-between items-center">
-                  <span>✅ Keep for Today</span>
+                  <span>Keep for Today</span>
                   <span className="bg-[#1F6F63]/10 text-[#1F6F63] px-2 py-0.5 rounded-full text-[9px]">{rescueBuckets.keep.length}</span>
                 </h3>
                 <div className="space-y-2 min-h-36">
@@ -3642,7 +3680,7 @@ export default function App() {
               {/* BUCKET 2: DO LATER */}
               <div className="bg-white border border-[#E4DFD5] p-4 rounded-2xl space-y-3">
                 <h3 className="font-bold text-xs uppercase tracking-wider text-[#B8892B] flex justify-between items-center">
-                  <span>📅 Defer to Tomorrow</span>
+                  <span>Defer to Tomorrow</span>
                   <span className="bg-[#B8892B]/10 text-[#B8892B] px-2 py-0.5 rounded-full text-[9px]">{rescueBuckets.later.length}</span>
                 </h3>
                 <div className="space-y-2 min-h-36">

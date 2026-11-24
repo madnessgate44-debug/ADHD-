@@ -107,7 +107,8 @@ Do not include any Markdown formatting, backticks, or comments. Output ONLY the 
       type: 'task',
       title: text,
       description: '',
-      subtasks: []
+      subtasks: [],
+      warning: err.message
     });
   }
 });
@@ -146,7 +147,8 @@ Do not include any Markdown backticks.`;
   } catch (err: any) {
     console.error('AI Insights error:', err);
     res.json({
-      insight: 'You are doing great! Keep using the planner and focus timers to build personalized insights about your productivity patterns.'
+      insight: 'You are doing great! Keep using the planner and focus timers to build personalized insights about your productivity patterns.',
+      warning: err.message
     });
   }
 });
