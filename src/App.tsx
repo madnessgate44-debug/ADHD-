@@ -3121,7 +3121,8 @@ export default function App() {
           ONBOARDING OVERLAY
           ============================================================ */}
       {showOnboarding && (
-        <div className="fixed inset-0 bg-[#F6F3ED] z-50 overflow-y-auto flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[#F6F3ED] z-50 overflow-y-auto">
+          <div className="min-h-full flex items-center justify-center p-4">
           <div className="max-w-2xl w-full bg-white border border-[#E4DFD5] p-8 md:p-12 rounded-[40px] shadow-xl my-8">
             {onboardingStep === 'welcome' ? (
               <div className="space-y-8 animate-fadeIn">
@@ -3133,6 +3134,13 @@ export default function App() {
                   <p className="text-[#6B7075] max-w-md mx-auto text-sm leading-relaxed">
                     Welcome. Standard planners demand rigid consistency. We build a supportive, adaptive shell around your attention span instead.
                   </p>
+                  <button
+                    onClick={() => setOnboardingStep('quiz')}
+                    className="w-full max-w-md mx-auto bg-[#1F6F63] hover:bg-[#153F38] text-white py-4 rounded-full font-bold shadow-lg flex items-center justify-center gap-2 group transition-all text-sm"
+                  >
+                    Start Cognitive Assessment
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
                 </div>
 
                 <div className="border-t border-[#E4DFD5] pt-6 space-y-6">
@@ -3184,7 +3192,7 @@ export default function App() {
                 <div className="bg-[#1F6F63]/5 p-5 rounded-2xl border border-[#1F6F63]/10 space-y-2">
                   <h4 className="text-xs uppercase tracking-wider font-bold text-[#1F6F63]">The Next Step</h4>
                   <p className="text-xs text-[#2c3138] leading-relaxed">
-                    We will now run a specialized cognitive assessment. This maps your exact ADHD executive functions (whether you struggle with **Initiation Overwhelm**, **Time Blindness**, or **Routine Instability**) and tunes Hisham's coaching pace.
+                    Next, a short 5-question quiz about your daily friction patterns (starting tasks, time awareness, or keeping routines). It tunes Hisham's coaching pace to you. It is not a medical assessment or diagnosis.
                   </p>
                 </div>
 
@@ -3432,6 +3440,7 @@ export default function App() {
                 </form>
               </div>
             )}
+          </div>
           </div>
         </div>
       )}
