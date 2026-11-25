@@ -1555,7 +1555,7 @@ export default function App() {
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
           <div className="flex items-center gap-2">
             <Flame className="w-4 h-4 text-orange-400 animate-pulse" />
-            <span className="text-xs font-bold uppercase tracking-wider text-orange-300">Momentum Meter (task game, not dopamine):</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-orange-300">Momentum Meter (a game score, not dopamine)</span>
             <span className="text-xs text-gray-200 font-mono">{dopamineLevel}% full</span>
           </div>
           
@@ -3075,7 +3075,7 @@ export default function App() {
             <div className="bg-white border border-[#E4DFD5] p-6 rounded-3xl shadow-sm space-y-4">
               <h2 className="text-lg font-fraunces font-medium text-[#153F38]">Account & Data Privacy</h2>
               <p className="text-xs text-[#6B7075]">
-                Your tasks, routines, medication log and daily logs are stored only in this browser. Text you submit to AI features (task breakdown, capture processing, coach insights) is sent to this app's server and on to Google's Gemini service to produce the answer. Nothing else leaves your device. Export a copy of your data or restore it anytime.
+                Your tasks, routines, medication log and daily logs are stored only in this browser. When you use an AI feature, the text it needs is sent to this app's server and on to Google's Gemini service: the task title (breakdown), the note you capture (capture processing), or your recent activity log with task and routine titles plus your quiz answers (coach insights). Medication names and logs are never sent. Nothing else leaves your device. Export a copy of your data or restore it anytime.
               </p>
 
               <div className="flex flex-wrap gap-2">
