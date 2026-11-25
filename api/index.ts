@@ -1,4 +1,4 @@
-// Vercel serverless entry. Mirrors the API routes of ../server.ts (keep both in sync); static files come from dist/.
+// API routes: single source. Mounted by ../server.ts locally and used as the Vercel serverless entry; static files come from dist/.
 import express from 'express';
 import { GoogleGenAI } from '@google/genai';
 
