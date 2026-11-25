@@ -3138,7 +3138,7 @@ export default function App() {
                     onClick={() => setOnboardingStep('quiz')}
                     className="w-full max-w-md mx-auto bg-[#1F6F63] hover:bg-[#153F38] text-white py-4 rounded-full font-bold shadow-lg flex items-center justify-center gap-2 group transition-all text-sm"
                   >
-                    Start Cognitive Assessment
+                    Start the 5-Question Quiz
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </button>
                 </div>
@@ -3200,15 +3200,15 @@ export default function App() {
                   onClick={() => setOnboardingStep('quiz')}
                   className="w-full bg-[#1F6F63] hover:bg-[#153F38] text-white py-4 rounded-full font-bold shadow-lg flex items-center justify-center gap-2 group transition-all text-sm"
                 >
-                  Start Cognitive Assessment 
+                  Start the 5-Question Quiz 
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
               </div>
             ) : (
               <div className="space-y-8 animate-fadeIn">
                 <div className="text-center space-y-1">
-                  <span className="text-[10px] uppercase tracking-wider font-bold text-[#1F6F63] bg-[#1F6F63]/10 px-3 py-1 rounded-full">Assessment</span>
-                  <h2 className="text-3xl font-fraunces font-medium text-[#153F38]">Cognitive Profile Quiz</h2>
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-[#1F6F63] bg-[#1F6F63]/10 px-3 py-1 rounded-full">Quiz</span>
+                  <h2 className="text-3xl font-fraunces font-medium text-[#153F38]">Daily Friction Quiz</h2>
                   <p className="text-xs text-[#6B7075]">We tailor the interface triggers based on your executive function needs.</p>
                 </div>
 
