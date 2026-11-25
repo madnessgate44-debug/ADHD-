@@ -295,7 +295,8 @@ export default function App() {
             let carryOvers: string[] = [];
             let hasCarryOver = false;
 
-            if (parsedDayState && parsedDayState.date !== today && parsedDayState.status !== 'closed') {
+            if (parsedDayState && parsedDayState.date !== today) {
+              // Unfinished tasks still in the plan carry over. A closed day only keeps tasks the user explicitly chose to carry (others are moved to backlog or archived at close).
               const prevTasks = t ? JSON.parse(t) : [];
               const unfinished = prevTasks.filter((task: Task) => 
                 parsedDayState.todayTaskIds.includes(task.id) && task.status === 'active'
@@ -375,12 +376,12 @@ export default function App() {
     setDopamineLevel(prev => {
       const next = prev + points;
       if (next >= 100) {
-        setRewardAnimation({ show: true, text: `🌟 DOPAMINE OVERFLOW! Attention Shield fully charged!`, emoji: '🚀🔥🎉' });
+        setRewardAnimation({ show: true, text: `🌟 Meter full! You filled the momentum meter (a task-completion game, not a measurement).`, emoji: '🚀🔥🎉' });
         localStorage.setItem('dopamineLevel', '0');
         setTimeout(() => setRewardAnimation(null), 4500);
         return 0;
       }
-      setRewardAnimation({ show: true, text: `${message} (+${points} Dopamine)`, emoji });
+      setRewardAnimation({ show: true, text: `${message} (+${points} pts)`, emoji });
       localStorage.setItem('dopamineLevel', next.toString());
       setTimeout(() => setRewardAnimation(null), 3000);
       return next;
@@ -1074,7 +1075,7 @@ export default function App() {
           triggerDopamineReward(35, 'Daily Record Sent to Coach Hisham!', '🤝');
           setIsTransmittingReport(false);
           setCoachReportNotes('');
-          alert('📨 Report transmitted! Coach Hisham Lansari reviewed your day and left an updated insight in your log.');
+          alert('📨 Saved on this device only. Nothing was sent. The feedback below is an automatic template.');
           return 100;
         }
 
@@ -1468,7 +1469,7 @@ export default function App() {
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-gradient-to-r from-[#153F38] to-[#1F6F63] border-2 border-yellow-400 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-bounce border-dashed">
           <div className="text-3xl">{rewardAnimation.emoji}</div>
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-yellow-300">Dopamine Shield Charged!</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-yellow-300">Momentum meter boost</p>
             <p className="text-sm font-semibold mt-0.5">{rewardAnimation.text}</p>
           </div>
         </div>
@@ -1525,8 +1526,8 @@ export default function App() {
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
           <div className="flex items-center gap-2">
             <Flame className="w-4 h-4 text-orange-400 animate-pulse" />
-            <span className="text-xs font-bold uppercase tracking-wider text-orange-300">Dopamine Stimulus Shield:</span>
-            <span className="text-xs text-gray-200 font-mono">{dopamineLevel}% Charged</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-orange-300">Momentum Meter (task game, not dopamine):</span>
+            <span className="text-xs text-gray-200 font-mono">{dopamineLevel}% full</span>
           </div>
           
           <div className="flex-1 w-full max-w-sm bg-black/40 h-3 rounded-full overflow-hidden border border-white/10 relative p-[1px]">
@@ -2342,7 +2343,7 @@ export default function App() {
                     : 'text-[#6B7075] hover:text-[#22262B] hover:bg-[#F6F3ED]'
                 }`}
               >
-                <Send className="w-4 h-4" /> Hisham Sync Portal
+                <Send className="w-4 h-4" /> Daily Log
                 {dailyReports.length > 0 && (
                   <span className="bg-orange-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">
                     {dailyReports.length}
@@ -2436,8 +2437,8 @@ export default function App() {
                       <FileText className="w-6 h-6" />
                     </div>
                     <div>
-                      <h2 className="text-lg font-fraunces font-medium text-[#153F38]">Daily Record Transmission</h2>
-                      <p className="text-xs text-[#6B7075]">Sync compiled cognitive logs directly with Coach Hisham Lansari</p>
+                      <h2 className="text-lg font-fraunces font-medium text-[#153F38]">Daily Record Log (saved on this device only)</h2>
+                      <p className="text-xs text-[#6B7075]">Save today's log on this device. Nothing is sent anywhere. Feedback is an automatic template, not a live reply from Coach Hisham.</p>
                     </div>
                   </div>
 
@@ -2536,9 +2537,9 @@ export default function App() {
                         <RefreshCw className="w-3.5 h-3.5 animate-spin text-orange-400" />
                         <span>
                           {transmissionStep === 0 && 'Compiling daily cognitive performance records...'}
-                          {transmissionStep === 1 && 'Encrypting and packing ADHD executive logs...'}
-                          {transmissionStep === 2 && 'Transmitting package to Coach Hisham\'s secure portal...'}
-                          {transmissionStep === 3 && 'Waiting for Hisham\'s automated coach receipt...'}
+                          {transmissionStep === 1 && 'Counting the tasks, routines and focus blocks...'}
+                          {transmissionStep === 2 && 'Saving the record on this device (nothing is sent)...'}
+                          {transmissionStep === 3 && 'Preparing the automatic template feedback...'}
                         </span>
                       </div>
                     </div>
@@ -2547,7 +2548,7 @@ export default function App() {
                       onClick={transmitReportToCoach}
                       className="w-full bg-[#1F6F63] hover:bg-[#153F38] text-white text-sm font-semibold py-3 px-6 rounded-full flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
                     >
-                      <Send className="w-4 h-4" /> Transmit Today's Log to Coach Hisham
+                      <Send className="w-4 h-4" /> Save Today's Log (this device only)
                     </button>
                   )}
                 </div>
@@ -2596,7 +2597,7 @@ export default function App() {
 
                           {/* Coach comment box */}
                           <div className="bg-[#1F6F63]/5 border-l-4 border-[#1F6F63] p-3 rounded-r-xl text-xs space-y-1">
-                            <span className="font-bold text-[#1F6F63] block">Coach Hisham Lansari's Feedback:</span>
+                            <span className="font-bold text-[#1F6F63] block">Automatic feedback (template, written in Coach Hisham's style):</span>
                             <p className="italic text-[#2c3138] leading-relaxed">"{report.coachFeedback}"</p>
                           </div>
 
@@ -2605,7 +2606,7 @@ export default function App() {
                               onClick={() => {
                                 const fullTxt = `*ADHD COACH SYNC REPORT - ${report.date}*\n\nTasks Completed: ${report.tasksCompleted}\nFocus Sprints: ${report.focusCompleted} (${report.focusMinutes} mins)\nRoutines Consistency: ${report.routinesCompleted}/${report.routinesTotal}\nMedications: ${report.medsStatus}\nRescue Shield Used: ${report.rescueApplied ? 'Yes' : 'No'}\nNotes: ${report.notes}\n\n*Coach Feedback:* "${report.coachFeedback}"`;
                                 navigator.clipboard.writeText(fullTxt);
-                                alert('📋 Report text copied to clipboard! You can now send it to Coach Hisham on WhatsApp.');
+                                alert('📋 Report text copied to your clipboard. Nothing was sent. Share it only if you choose to.');
                               }}
                               className="text-[10px] text-[#1F6F63] font-semibold hover:underline flex items-center gap-1 bg-white border border-[#E4DFD5] px-2.5 py-1 rounded-full shadow-sm cursor-pointer"
                             >
@@ -2924,7 +2925,7 @@ export default function App() {
                             </div>
 
                             <div className="bg-white border border-[#E4DFD5] p-6 rounded-3xl shadow-sm border-l-4 border-l-[#1F6F63] space-y-3">
-                              <span className="text-[#1F6F63] uppercase text-[9px] font-bold tracking-wider block">Coach Hisham Lansari's Feedback</span>
+                              <span className="text-[#1F6F63] uppercase text-[9px] font-bold tracking-wider block">Automatic feedback (template, Coach Hisham style)</span>
                               <p className="text-sm font-serif text-[#153F38] bg-[#1F6F63]/5 p-4 rounded-2xl leading-relaxed">
                                 "{report.coachFeedback}"
                               </p>
