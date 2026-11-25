@@ -199,6 +199,14 @@ export default function App() {
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerTotalSeconds, setTimerTotalSeconds] = useState(0);
   const [timerPaused, setTimerPaused] = useState(false);
+  const timerPausedRef = useRef(false);
+  useEffect(() => { timerPausedRef.current = timerPaused; }, [timerPaused]);
+  const [rescueUndo, setRescueUndo] = useState<{ date: string; dayState: DayState; archivedIds: string[] } | null>(() => {
+    try { return JSON.parse(localStorage.getItem('rescueUndo') || 'null'); } catch { return null; }
+  });
+  const [medFormOpen, setMedFormOpen] = useState(false);
+  const [medFormTitle, setMedFormTitle] = useState('');
+  const [medFormDosage, setMedFormDosage] = useState('');
   const [timerFocusTaskId, setTimerFocusTaskId] = useState<string | null>(null);
   const [parkedThoughts, setParkedThoughts] = useState('');
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -399,10 +407,12 @@ export default function App() {
     setTimerSeconds(minutes * 60);
     setTimerActive(true);
     setTimerPaused(false);
+    timerPausedRef.current = false;
     logEvent('focus_started', 'task', taskId || undefined, { duration: minutes });
 
     timerIntervalRef.current = setInterval(() => {
       setTimerSeconds(prev => {
+        if (timerPausedRef.current) return prev;
         if (prev <= 1) {
           clearInterval(timerIntervalRef.current!);
           setTimerActive(false);
@@ -825,12 +835,26 @@ export default function App() {
     logEvent('rescue_started');
   };
 
+  const undoRescue = () => {
+    if (!rescueUndo || rescueUndo.date !== getTodayStr()) return;
+    const restored = tasks.map(t => rescueUndo.archivedIds.includes(t.id) && t.status === 'archived' ? { ...t, status: 'active' as const, updatedAt: new Date().toISOString() } : t);
+    saveTasks(restored);
+    saveDayState(rescueUndo.dayState);
+    localStorage.removeItem('rescueUndo');
+    setRescueUndo(null);
+    logEvent('rescue_undone');
+  };
+
   const applyRescueChanges = () => {
     if (!dayState) return;
     
     const keepIds = rescueBuckets.keep.map(t => t.id);
     const laterIds = rescueBuckets.later.map(t => t.id);
     const dropIds = rescueBuckets.drop.map(t => t.id);
+
+    const snapshot = { date: getTodayStr(), dayState, archivedIds: dropIds };
+    localStorage.setItem('rescueUndo', JSON.stringify(snapshot));
+    setRescueUndo(snapshot);
 
     // Update tasks statuses
     const updatedTasks = tasks.map(t => {
@@ -1509,6 +1533,11 @@ export default function App() {
                 >
                   <Shield className="w-3.5 h-3.5 text-[#B8892B]" /> Rescue Day
                 </button>
+                {rescueUndo && rescueUndo.date === getTodayStr() && (
+                  <button onClick={undoRescue} className="bg-white text-[#22262B] text-xs font-semibold px-4 py-2 rounded-full border border-[#D4BFA0]">
+                    Undo rescue
+                  </button>
+                )}
                 <button 
                   onClick={openEveningResetPlan} 
                   className="bg-[#153F38] hover:bg-black text-white text-xs font-semibold px-4 py-2 rounded-full transition-all flex items-center gap-1"
@@ -2066,28 +2095,36 @@ export default function App() {
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-fraunces font-medium text-[#153F38]">Coached Medications Log</h2>
                 <button 
-                  onClick={() => {
-                    const title = prompt('Medication Name:');
-                    if (!title) return;
-                    const dosage = prompt('Dosage/Instructions:') || '';
-                    const newMed: Medication = {
-                      id: 'med_' + generateId(),
-                      title,
-                      dosage,
-                      active: true,
-                      reminderTime: null,
-                      log: [],
-                      createdAt: new Date().toISOString()
-                    };
-                    saveMedications([...medications, newMed]);
-                    logEvent('medication_created', 'medication', newMed.id);
-                  }}
+                  onClick={() => setMedFormOpen(o => !o)}
                   className="bg-[#1F6F63] hover:bg-[#153F38] text-white text-xs font-semibold px-4 py-2 rounded-full"
                 >
                   + Add Medication
                 </button>
               </div>
 
+              <p className="text-[11px] text-[#6B7075] mb-3">
+                This is a simple log you fill in yourself. The app does not send phone reminders and is not medical advice. Follow your doctor's instructions.
+              </p>
+              {medFormOpen && (
+                <div className="mb-3 p-3 bg-[#F6F3ED] border border-[#E4DFD5] rounded-2xl space-y-2">
+                  <input value={medFormTitle} onChange={e => setMedFormTitle(e.target.value)} placeholder="Medication name" className="w-full text-sm p-2 rounded-xl border border-[#E4DFD5]" />
+                  <input value={medFormDosage} onChange={e => setMedFormDosage(e.target.value)} placeholder="Dosage / note (optional)" className="w-full text-sm p-2 rounded-xl border border-[#E4DFD5]" />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const title = medFormTitle.trim();
+                        if (!title) return;
+                        const newMed: Medication = { id: 'med_' + generateId(), title, dosage: medFormDosage.trim(), active: true, reminderTime: null, log: [], createdAt: new Date().toISOString() };
+                        saveMedications([...medications, newMed]);
+                        logEvent('medication_created', 'medication', newMed.id);
+                        setMedFormTitle(''); setMedFormDosage(''); setMedFormOpen(false);
+                      }}
+                      className="bg-[#1F6F63] text-white text-xs font-semibold px-4 py-2 rounded-full"
+                    >Save medication</button>
+                    <button onClick={() => setMedFormOpen(false)} className="text-xs px-4 py-2 rounded-full border border-[#E4DFD5]">Cancel</button>
+                  </div>
+                </div>
+              )}
               <div className="space-y-3">
                 {medications.map(m => {
                   const todayLog = m.log.find(l => l.date === getTodayStr());
@@ -2106,7 +2143,8 @@ export default function App() {
                           {todayLog?.status === 'taken' ? '💊 Taken Today' : '💊 Mark Taken'}
                         </button>
                         <button 
-                          onClick={() => saveMedications(medications.filter(med => med.id !== m.id))}
+                          aria-label={`Remove ${m.title}`}
+                  onClick={() => { if (confirm(`Remove ${m.title} and its log from this device?`)) saveMedications(medications.filter(med => med.id !== m.id)); }}
                           className="text-red-500 hover:bg-red-50 p-2 rounded-full"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -3037,7 +3075,7 @@ export default function App() {
             <div className="bg-white border border-[#E4DFD5] p-6 rounded-3xl shadow-sm space-y-4">
               <h2 className="text-lg font-fraunces font-medium text-[#153F38]">Account & Data Privacy</h2>
               <p className="text-xs text-[#6B7075]">
-                Wired Leader operates server-side but respects your complete privacy. Download a physical copy of your logs or restore it anytime.
+                Your tasks, routines, medication log and daily logs are stored only in this browser. Text you submit to AI features (task breakdown, capture processing, coach insights) is sent to this app's server and on to Google's Gemini service to produce the answer. Nothing else leaves your device. Export a copy of your data or restore it anytime.
               </p>
 
               <div className="flex flex-wrap gap-2">
